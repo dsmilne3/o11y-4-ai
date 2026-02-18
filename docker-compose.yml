@@ -1,0 +1,154 @@
+# Docker Compose for AI Observability Demo
+# Includes the demo application and Grafana Alloy for telemetry collection
+
+version: "3.8"
+
+services:
+  # AI Observability Demo Application
+  ai-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-observability-demo
+    ports:
+      - "8080:8080" # FastAPI application
+      - "8000:8000" # Prometheus metrics
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-1106-preview}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+
+      # Local Model Configuration
+      - LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-microsoft/DialoGPT-medium}
+      - USE_GPU=${USE_GPU:-false}
+      - GPU_DEVICE_ID=${GPU_DEVICE_ID:-0}
+
+      # Vector Database Configuration
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chroma_db
+      - CHROMA_COLLECTION_NAME=ai_demo_collection
+
+      # OpenTelemetry Configuration
+      - OTEL_SERVICE_NAME=ai-observability-demo
+      - OTEL_SERVICE_VERSION=1.0.0
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=docker
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+
+      # Application Configuration
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/var/log/ai-demo
+    depends_on:
+      - alloy
+    networks:
+      - ai-observability
+    labels:
+      - "ai-observability-demo=true"
+    restart: unless-stopped
+
+  # Grafana Alloy for telemetry collection
+  alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    ports:
+      - "12345:12345" # HTTP server
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+    environment:
+      # Grafana Cloud Configuration
+      - GRAFANA_CLOUD_OTLP_ENDPOINT=${GRAFANA_CLOUD_OTLP_ENDPOINT}
+      - GRAFANA_CLOUD_OTLP_AUTH=${GRAFANA_CLOUD_OTLP_AUTH}
+      - GRAFANA_CLOUD_PROMETHEUS_URL=${GRAFANA_CLOUD_PROMETHEUS_URL}
+      - GRAFANA_CLOUD_PROMETHEUS_USER=${GRAFANA_CLOUD_PROMETHEUS_USER}
+      - GRAFANA_CLOUD_PROMETHEUS_PASSWORD=${GRAFANA_CLOUD_PROMETHEUS_PASSWORD}
+      - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
+      - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
+      - GRAFANA_CLOUD_LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_PASSWORD}
+    volumes:
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/ai-demo:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro # For service discovery
+    command:
+      - "run"
+      - "/etc/alloy/config.alloy"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--disable-reporting"
+    networks:
+      - ai-observability
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:12345/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: ChromaDB as a separate service (alternative to embedded)
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8001:8000"
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_PORT=8000
+      - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
+    volumes:
+      - ./data/chromadb:/chroma/chroma
+    networks:
+      - ai-observability
+    restart: unless-stopped
+    profiles:
+      - external-chromadb
+
+  # Development tools
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    networks:
+      - ai-observability
+    restart: unless-stopped
+    profiles:
+      - dev-tools
+
+  # Jupyter notebook for data exploration
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jupyter-notebook
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+    command: >
+      bash -c "
+        pip install jupyter jupyterlab &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+      "
+    networks:
+      - ai-observability
+    profiles:
+      - dev-tools
+
+networks:
+  ai-observability:
+    driver: bridge
+    name: ai-observability-network
+
+volumes:
+  ai_demo_data:
+    driver: local
+  chromadb_data:
+    driver: local

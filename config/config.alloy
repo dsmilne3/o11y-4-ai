@@ -1,0 +1,172 @@
+// Grafana Alloy configuration for AI Observability Demo
+// This configuration collects OpenTelemetry signals and forwards them to Grafana Cloud
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+//
+// OTLP Receivers - Collect telemetry from the demo application
+//
+
+otelcol.receiver.otlp "ai_demo" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  
+  output {
+    traces  = [otelcol.processor.memory_limiter.default.input]
+    metrics = [otelcol.processor.memory_limiter.default.input]
+    logs    = [otelcol.processor.memory_limiter.default.input]
+  }
+}
+
+// Memory limiter processor to prevent OOM
+otelcol.processor.memory_limiter "default" {
+  limit_mib        = 512
+  spike_limit_mib  = 128
+  check_interval   = "5s"
+  
+  output {
+    traces  = [otelcol.processor.resource.ai_demo.input]
+    metrics = [otelcol.processor.resource.ai_demo.input]
+    logs    = [otelcol.processor.resource.ai_demo.input]
+  }
+}
+
+// Resource processor to add/modify resource attributes
+otelcol.processor.resource "ai_demo" {
+  attributes {
+    "service.environment" = "demo"
+    "demo.version"        = "1.0.0"
+    "deployment.type"     = "local"
+  }
+  
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+  }
+}
+
+// Batch processor to optimize data transmission
+otelcol.processor.batch "default" {
+  timeout       = "1s"
+  send_batch_size = 1024
+  
+  output {
+    traces  = [otelcol.exporter.otlp.grafana_cloud.input]
+    metrics = [otelcol.exporter.otlp.grafana_cloud.input]
+    logs    = [otelcol.exporter.otlp.grafana_cloud.input]
+  }
+}
+
+//
+// Prometheus Metrics Collection
+//
+
+prometheus.scrape "ai_demo_app" {
+  targets = [
+    {"__address__" = "localhost:8000"},
+  ]
+  
+  forward_to = [prometheus.relabel.ai_demo.receiver]
+  
+  job_name        = "ai-observability-demo"
+  metrics_path    = "/metrics"
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+prometheus.relabel "ai_demo" {
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+  
+  rule {
+    source_labels = ["__name__"]
+    regex         = "llm_.*|vector_.*|model_.*|gpu_.*|cpu_.*|memory_.*|http_.*"
+    action        = "keep"
+  }
+  
+  rule {
+    target_label = "demo_component"
+    replacement  = "ai-observability"
+  }
+  
+  rule {
+    target_label = "environment"
+    replacement  = "demo"
+  }
+}
+
+//
+// System Metrics Collection
+//
+
+prometheus.exporter.unix "system" {
+  include_exporter_metrics = true
+  disable_collectors       = ["mdadm"]
+}
+
+prometheus.scrape "system_metrics" {
+  targets         = prometheus.exporter.unix.system.targets
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  job_name        = "ai-demo-system"
+  scrape_interval = "15s"
+}
+
+//
+// Exporters to Grafana Cloud
+//
+
+otelcol.exporter.otlp "grafana_cloud" {
+  client {
+    endpoint = env("GRAFANA_CLOUD_OTLP_ENDPOINT")
+    headers = {
+      "Authorization" = env("GRAFANA_CLOUD_OTLP_AUTH")
+    }
+  }
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_CLOUD_PROMETHEUS_URL")
+    
+    basic_auth {
+      username = env("GRAFANA_CLOUD_PROMETHEUS_USER")
+      password = env("GRAFANA_CLOUD_PROMETHEUS_PASSWORD")
+    }
+    
+    queue_config {
+      capacity             = 10000
+      max_samples_per_send = 5000
+      batch_send_deadline  = "5s"
+    }
+    
+    metadata_config {
+      send         = true
+      send_interval = "1m"
+    }
+  }
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_CLOUD_LOKI_URL")
+    
+    basic_auth {
+      username = env("GRAFANA_CLOUD_LOKI_USER")
+      password = env("GRAFANA_CLOUD_LOKI_PASSWORD")
+    }
+    
+    external_labels = {
+      "cluster"     = "ai-demo"
+      "environment" = "demo"
+      "region"      = "local"
+    }
+  }
+}
