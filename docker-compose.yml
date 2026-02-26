@@ -34,6 +34,10 @@ services:
       # Or uncomment Alloy service below to use Alloy as intermediary
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+      # OpenLIT Configuration (set ENABLE_OPENLIT=true in .env to enable)
+      - ENABLE_OPENLIT=${ENABLE_OPENLIT:-false}
+      - OPENLIT_COLLECT_GPU_STATS=${OPENLIT_COLLECT_GPU_STATS:-false}
+      - DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT:-docker}
 
       # Application Configuration
       - APP_HOST=0.0.0.0
