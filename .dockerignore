@@ -94,6 +94,7 @@ k8s/
 # Scripts
 scripts/
 *.sh
+!docker-entrypoint.sh
 
 # GitHub
 .github/
