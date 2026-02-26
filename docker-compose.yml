@@ -32,8 +32,10 @@ services:
       - OTEL_SERVICE_NAME=ai-observability-demo
       - OTEL_SERVICE_VERSION=1.0.0
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=docker
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
+      # Direct OTLP export to Grafana Cloud (set OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_HEADERS in .env)
+      # Or uncomment Alloy service below to use Alloy as intermediary
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
 
       # Application Configuration
       - APP_HOST=0.0.0.0
@@ -44,50 +46,51 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/var/log/ai-demo
-    depends_on:
-      - alloy
+    # depends_on:
+    #   - alloy  # Comment out if not using Alloy
     networks:
       - ai-observability
     labels:
       - "ai-observability-demo=true"
     restart: unless-stopped
 
-  # Grafana Alloy for telemetry collection
-  alloy:
-    image: grafana/alloy:latest
-    container_name: grafana-alloy
-    ports:
-      - "12345:12345" # HTTP server
-      - "4317:4317" # OTLP gRPC receiver
-      - "4318:4318" # OTLP HTTP receiver
-    environment:
-      # Grafana Cloud Configuration
-      - GRAFANA_CLOUD_OTLP_ENDPOINT=${GRAFANA_CLOUD_OTLP_ENDPOINT}
-      - GRAFANA_CLOUD_OTLP_AUTH=${GRAFANA_CLOUD_OTLP_AUTH}
-      - GRAFANA_CLOUD_PROMETHEUS_URL=${GRAFANA_CLOUD_PROMETHEUS_URL}
-      - GRAFANA_CLOUD_PROMETHEUS_USER=${GRAFANA_CLOUD_PROMETHEUS_USER}
-      - GRAFANA_CLOUD_PROMETHEUS_PASSWORD=${GRAFANA_CLOUD_PROMETHEUS_PASSWORD}
-      - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
-      - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
-      - GRAFANA_CLOUD_LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_PASSWORD}
-    volumes:
-      - ./config/config.alloy:/etc/alloy/config.alloy:ro
-      - ./logs:/var/log/ai-demo:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro # For service discovery
-    command:
-      - "run"
-      - "/etc/alloy/config.alloy"
-      - "--server.http.listen-addr=0.0.0.0:12345"
-      - "--disable-reporting"
-    networks:
-      - ai-observability
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:12345/-/healthy || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+  # Grafana Alloy for telemetry collection (optional - comment out to use direct OTLP export)
+  # Uncomment this section if you want to use Alloy for logs and system metrics
+  # alloy:
+  #   image: grafana/alloy:latest
+  #   container_name: grafana-alloy
+  #   ports:
+  #     - "12345:12345" # HTTP server
+  #     - "4317:4317" # OTLP gRPC receiver
+  #     - "4318:4318" # OTLP HTTP receiver
+  #   environment:
+  #     # Grafana Cloud Configuration
+  #     - GRAFANA_CLOUD_OTLP_ENDPOINT=${GRAFANA_CLOUD_OTLP_ENDPOINT}
+  #     - GRAFANA_CLOUD_OTLP_AUTH=${GRAFANA_CLOUD_OTLP_AUTH}
+  #     - GRAFANA_CLOUD_PROMETHEUS_URL=${GRAFANA_CLOUD_PROMETHEUS_URL}
+  #     - GRAFANA_CLOUD_PROMETHEUS_USER=${GRAFANA_CLOUD_PROMETHEUS_USER}
+  #     - GRAFANA_CLOUD_PROMETHEUS_PASSWORD=${GRAFANA_CLOUD_PROMETHEUS_PASSWORD}
+  #     - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
+  #     - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
+  #     - GRAFANA_CLOUD_LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_PASSWORD}
+  #   volumes:
+  #     - ./config/config.alloy:/etc/alloy/config.alloy:ro
+  #     - ./logs:/var/log/ai-demo:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro # For service discovery
+  #   command:
+  #     - "run"
+  #     - "/etc/alloy/config.alloy"
+  #     - "--server.http.listen-addr=0.0.0.0:12345"
+  #     - "--disable-reporting"
+  #   networks:
+  #     - ai-observability
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:12345/-/healthy || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
 
   # Optional: ChromaDB as a separate service (alternative to embedded)
   chromadb:

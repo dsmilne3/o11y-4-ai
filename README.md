@@ -93,6 +93,9 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ### Docker Deployment Option
 
 ```bash
+# Use 'docker compose' (plugin) or 'docker-compose' (standalone)
+docker compose up --build
+# or
 docker-compose up --build
 ```
 
@@ -133,6 +136,7 @@ python scripts/demo_scenarios.py --help
 - LLM operation spans with semantic attributes
 - Database operation tracing
 - Custom business logic spans
+- **Export**: Direct to Grafana Cloud via OTLP (no Alloy required)
 
 ### Metrics
 
@@ -141,6 +145,7 @@ python scripts/demo_scenarios.py --help
 - GPU utilization
 - Database performance
 - Error rates and latencies
+- **Export**: Direct to Grafana Cloud via OTLP, or via Alloy for Prometheus scraping
 
 ### Logs
 
@@ -148,6 +153,7 @@ python scripts/demo_scenarios.py --help
 - Error details and stack traces
 - Performance insights
 - Business metrics
+- **Export**: **Requires Grafana Alloy** to forward logs to Grafana Cloud (Loki)
 
 ## Documentation
 

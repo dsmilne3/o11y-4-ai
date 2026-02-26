@@ -48,7 +48,7 @@ source venv/bin/activate  # Linux/macOS
 # or venv\Scripts\activate  # Windows
 
 # Start the demo application
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ### 4. Run Demo Scenarios
@@ -142,15 +142,32 @@ curl http://localhost:8080/stats
 
 ## Grafana Cloud Integration
 
+### Telemetry Export Options
+
+The application can send telemetry to Grafana Cloud in two ways:
+
+**Direct OTLP Export (No Alloy Required):**
+- ✅ **Traces**: Sent directly via OTLP HTTP/gRPC
+- ✅ **Metrics**: Sent directly via OTLP HTTP/gRPC
+- ❌ **Logs**: Not sent directly (requires Alloy)
+
+**Via Grafana Alloy (Optional but Recommended):**
+- ✅ **Traces**: Can be collected and forwarded (or use direct export)
+- ✅ **Metrics**: Can scrape Prometheus metrics and forward to Grafana Cloud
+- ✅ **Logs**: Required for sending logs to Grafana Cloud (Loki)
+- ✅ **System Metrics**: Additional system-level metrics collection
+
+**Note:** If you only need traces and metrics, you can use direct OTLP export by configuring `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` in your `.env` file. Alloy is **required** if you want to send logs to Grafana Cloud.
+
 ### 1. **Get Grafana Cloud Credentials**
 
 Sign up for [Grafana Cloud](https://grafana.com/cloud/) and get:
 
-- OTLP endpoint and credentials
-- Prometheus endpoint and credentials
-- Loki endpoint and credentials
+- OTLP endpoint and credentials (for direct export or Alloy)
+- Prometheus endpoint and credentials (for Alloy)
+- Loki endpoint and credentials (for Alloy - **required for logs**)
 
-### 2. **Configure Grafana Alloy**
+### 2. **Configure Grafana Alloy** (Optional for Logs)
 
 ```bash
 # Copy Alloy environment file

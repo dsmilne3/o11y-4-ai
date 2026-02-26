@@ -41,12 +41,6 @@ otelcol.processor.memory_limiter "default" {
 
 // Resource processor to add/modify resource attributes
 otelcol.processor.resource "ai_demo" {
-  attributes {
-    "service.environment" = "demo"
-    "demo.version"        = "1.0.0"
-    "deployment.type"     = "local"
-  }
-  
   output {
     traces  = [otelcol.processor.batch.default.input]
     metrics = [otelcol.processor.batch.default.input]
@@ -127,7 +121,7 @@ otelcol.exporter.otlp "grafana_cloud" {
   client {
     endpoint = env("GRAFANA_CLOUD_OTLP_ENDPOINT")
     headers = {
-      "Authorization" = env("GRAFANA_CLOUD_OTLP_AUTH")
+      "Authorization" = env("GRAFANA_CLOUD_OTLP_AUTH"),
     }
   }
 }
@@ -164,9 +158,9 @@ loki.write "grafana_cloud" {
     }
     
     external_labels = {
-      "cluster"     = "ai-demo"
-      "environment" = "demo"
-      "region"      = "local"
+      "cluster"     = "ai-demo",
+      "environment" = "demo",
+      "region"      = "local",
     }
   }
 }

@@ -124,10 +124,33 @@ mkdir -p logs
 echo "✅ Data directories created"
 
 # Check if Docker is available
+docker_available=false
+docker_compose_available=false
+
 if command_exists docker; then
-    echo "🐳 Docker detected - you can use 'docker-compose up' for containerized deployment"
+    docker_available=true
+    # Check for docker compose (plugin, preferred) or docker-compose (standalone)
+    if docker compose version >/dev/null 2>&1; then
+        docker_compose_available=true
+        docker_compose_cmd="docker compose"
+    elif command_exists docker-compose; then
+        docker_compose_available=true
+        docker_compose_cmd="docker-compose"
+    fi
+    
+    if [ "$docker_compose_available" = true ]; then
+        echo "🐳 Docker and Docker Compose detected - you can use '$docker_compose_cmd up' for containerized deployment"
+    else
+        echo "🐳 Docker detected but Docker Compose is not available"
+        echo ""
+        echo "To install Docker Compose:"
+        echo "  Ubuntu/Debian: sudo apt-get install docker-compose"
+        echo "  Or use Docker Compose plugin: sudo apt-get install docker-compose-plugin"
+        echo "  Then use: docker compose up --build"
+    fi
 else
     echo "ℹ️  Docker not found - running in local mode only"
+    echo "   To install Docker, see: https://docs.docker.com/get-docker/"
 fi
 
 echo ""
@@ -142,6 +165,8 @@ echo "   python scripts/demo_scenarios.py"
 echo "4. View metrics at http://localhost:8000/metrics"
 echo "5. View API docs at http://localhost:8080/docs"
 echo ""
-echo "For Docker deployment:"
-echo "   docker-compose up --build"
+if [ "$docker_available" = true ] && [ "$docker_compose_available" = true ]; then
+    echo "For Docker deployment:"
+    echo "   $docker_compose_cmd up --build"
+fi
 echo ""
