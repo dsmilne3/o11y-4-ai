@@ -75,6 +75,8 @@ This demo application showcases comprehensive observability for AI workloads usi
 
 ## Quick Start
 
+### Local Deployment Option
+
 ```bash
 # Clone and setup
 git clone <repo-url>
@@ -85,16 +87,34 @@ chmod +x scripts/setup.sh
 # Configure environment (edit .env with your OPENAI_API_KEY)
 # Then start the application
 source venv/bin/activate
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-**For detailed setup instructions, troubleshooting, and advanced configuration, see the [Getting Started Guide](GETTING_STARTED.md).**
-
-### Docker Setup
+### Docker Deployment Option
 
 ```bash
 docker-compose up --build
 ```
+
+### Running Demo Scenarios
+
+Once the application is running, you can run demo scenarios in a new terminal:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run a single scenario or all demo scenarios
+python scripts/demo_scenarios.py --scenario chat
+python scripts/demo_scenarios.py --scenario pipeline
+python scripts/demo_scenarios.py --scenario local
+python scripts/demo_scenarios.py
+
+# View help for available scenarios and options
+python scripts/demo_scenarios.py --help
+```
+
+**For detailed setup instructions, troubleshooting, and advanced configuration, see the [Getting Started Guide](GETTING_STARTED.md).**
 
 ## API Endpoints
 

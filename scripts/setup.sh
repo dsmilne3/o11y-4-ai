@@ -80,10 +80,30 @@ fi
 
 echo "✅ Virtual environment activated"
 
+# Verify we're using venv's pip (not system pip)
+# Check if VIRTUAL_ENV is set (indicates venv is active)
+if [ -z "${VIRTUAL_ENV:-}" ]; then
+    echo "⚠️  Virtual environment may not be activated properly"
+    if [ -f "venv/bin/pip" ]; then
+        echo "   Using venv pip explicitly"
+        PIP_CMD="venv/bin/pip"
+    else
+        echo "❌ venv pip not found - virtual environment may be corrupted"
+        exit 1
+    fi
+else
+    PIP_CMD="pip"
+    echo "✅ Using pip from virtual environment: $VIRTUAL_ENV"
+fi
+
+# Clean pip cache to save disk space before installing
+echo "🧹 Cleaning pip cache to free disk space..."
+$PIP_CMD cache purge 2>/dev/null || true
+
 # Install dependencies
 echo "📦 Installing Python dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
+$PIP_CMD install --upgrade pip
+$PIP_CMD install --no-cache-dir -r requirements.txt
 
 echo "✅ Dependencies installed"
 
