@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -32,11 +33,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY config/ ./config/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create data directory for ChromaDB
 RUN mkdir -p ./data/chroma_db && chown -R app:app ./data
 
-# Change to non-root user
-USER app
+# Set entrypoint (runs as root to fix permissions, then switches to app user)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+# Note: We don't set USER here - the entrypoint script handles user switching
+# This allows the entrypoint to run as root to fix volume permissions
 
 # Expose ports
 EXPOSE 8080 8000 4317 4318

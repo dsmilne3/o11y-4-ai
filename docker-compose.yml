@@ -1,8 +1,6 @@
 # Docker Compose for AI Observability Demo
 # Includes the demo application and Grafana Alloy for telemetry collection
 
-version: "3.8"
-
 services:
   # AI Observability Demo Application
   ai-demo:
