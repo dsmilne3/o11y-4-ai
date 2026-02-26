@@ -28,15 +28,53 @@ echo "✅ Prerequisites check passed"
 # Create and activate virtual environment
 echo "🔧 Setting up Python virtual environment..."
 if [ ! -d "venv" ]; then
-    python3 -m venv venv
+    # Temporarily disable exit on error to catch venv creation failure
+    set +e
+    venv_error=$(python3 -m venv venv 2>&1)
+    venv_exit_code=$?
+    set -e
+    
+    if [ $venv_exit_code -ne 0 ] || [ ! -d "venv" ]; then
+        echo ""
+        echo "❌ Failed to create virtual environment"
+        if [ -n "$venv_error" ]; then
+            echo ""
+            echo "Error details:"
+            echo "$venv_error" | sed 's/^/   /'
+        fi
+        echo ""
+        echo "The python3-venv package is required but not installed."
+        echo ""
+        echo "On Debian/Ubuntu systems, install it with:"
+        echo "  sudo apt-get update && sudo apt-get install -y python3-venv"
+        echo ""
+        echo "On macOS, it should be included with Python."
+        echo "On other systems, install the python3-venv package for your distribution."
+        exit 1
+    fi
+fi
+
+# Verify venv exists before activation
+if [ ! -d "venv" ]; then
+    echo "❌ Virtual environment directory not found"
+    exit 1
 fi
 
 # Activate virtual environment
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
     # Windows
+    if [ ! -f "venv/Scripts/activate" ]; then
+        echo "❌ Virtual environment activation script not found (venv/Scripts/activate)"
+        exit 1
+    fi
     source venv/Scripts/activate
 else
     # macOS/Linux
+    if [ ! -f "venv/bin/activate" ]; then
+        echo "❌ Virtual environment activation script not found (venv/bin/activate)"
+        echo "   The venv may not have been created correctly."
+        exit 1
+    fi
     source venv/bin/activate
 fi
 

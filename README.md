@@ -75,50 +75,24 @@ This demo application showcases comprehensive observability for AI workloads usi
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.9+
-- CUDA-compatible GPU (for local model)
-- OpenAI API key
-- Grafana Cloud account
-
-### Installation
-
-1. Clone and setup:
-
 ```bash
+# Clone and setup
 git clone <repo-url>
 cd o11y-4-ai
-pip install -r requirements.txt
-```
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 
-2. Configure environment:
-
-```bash
-cp .env.example .env
-# Edit .env with your API keys and endpoints
-```
-
-3. Start services:
-
-```bash
-# Start the demo application
+# Configure environment (edit .env with your OPENAI_API_KEY)
+# Then start the application
+source venv/bin/activate
 python -m uvicorn app.main:app --reload
-
-# Start Grafana Alloy (in separate terminal)
-./scripts/start-alloy.sh
 ```
 
-4. Run demo scenarios:
-
-```bash
-python scripts/demo_scenarios.py
-```
+**For detailed setup instructions, troubleshooting, and advanced configuration, see the [Getting Started Guide](GETTING_STARTED.md).**
 
 ### Docker Setup
 
 ```bash
-# Build and run with Docker Compose
 docker-compose up --build
 ```
 
