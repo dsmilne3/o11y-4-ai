@@ -459,12 +459,12 @@ def initialize_observability() -> None:
         # Setup logging first
         setup_logging()
         
-        # Setup metrics first so our MeterProvider (with OTLP + Prometheus) is the global one.
-        # This ensures vector_* and all custom metrics are always sent to OTEL_EXPORTER_OTLP_ENDPOINT.
+        # Setup our MeterProvider first (OTLP + Prometheus). We use it for both manual OTel
+        # metrics and, when possible, pass our meter to OpenLIT so OpenLIT metrics go through it too.
         setup_metrics()
         
-        # Then init OpenLIT with our meter so it uses our provider and does not replace it.
-        # Otherwise OpenLIT's provider would be the only exporter and vector_* metrics would not be sent.
+        # Init OpenLIT so we get both: OpenLIT auto-instrumentation (gen_ai*, evals) AND our
+        # manual OTel (vector_*, custom gen_ai*). Pass our meter so both are on one provider.
         if os.getenv("ENABLE_OPENLIT", "false").lower() == "true":
             initialize_openlit_instrumentation()
         
@@ -516,11 +516,10 @@ def initialize_openlit_instrumentation():
         
         logger.info("Initializing OpenLIT auto-instrumentation...")
         
-        # Disable OpenLIT's own metrics so it does not replace our MeterProvider. Our provider
-        # (set in setup_metrics()) exports all metrics to OTLP, including vector_* and gen_ai_*
-        # from openai_service.py. OpenLIT still does tracing and evals; we use manual gen_ai_*
-        # instrumentation for metrics.
-        openlit.init(
+        # Use our app meter so OpenLIT records into our MeterProvider; both OpenLIT metrics
+        # (gen_ai*, evals_request_total, etc.) and our manual metrics (vector_*, etc.) export together.
+        app_meter = metrics.get_meter("openlit.integration", "1.0")
+        init_kw = dict(
             otlp_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
             otlp_headers=_parse_otlp_headers(os.getenv("OTEL_EXPORTER_OTLP_HEADERS")),
             application_name=os.getenv("OTEL_SERVICE_NAME", "ai-observability-demo"),
@@ -531,15 +530,25 @@ def initialize_openlit_instrumentation():
             ),
             collect_gpu_stats=os.getenv("OPENLIT_COLLECT_GPU_STATS", "false").lower() == "true",
             disable_batch=False,
-            disable_metrics=True,
         )
-        
-        logger.info(
-            "OpenLIT auto-instrumentation initialized",
-            telemetry_sdk_name="openlit",
-            disable_metrics=True,
-            gpu_stats_enabled=os.getenv("OPENLIT_COLLECT_GPU_STATS", "false").lower() == "true"
-        )
+        try:
+            openlit.init(**init_kw, meter=app_meter)
+            logger.info(
+                "OpenLIT auto-instrumentation initialized (metrics via app MeterProvider)",
+                telemetry_sdk_name="openlit",
+                gpu_stats_enabled=init_kw["collect_gpu_stats"],
+            )
+        except TypeError:
+            # Older OpenLIT may not accept meter=; init without it (OpenLIT may set its own provider).
+            openlit.init(**init_kw)
+            logger.info(
+                "OpenLIT auto-instrumentation initialized (OpenLIT MeterProvider)",
+                telemetry_sdk_name="openlit",
+                gpu_stats_enabled=init_kw["collect_gpu_stats"],
+            )
+            logger.warning(
+                "OpenLIT init does not accept meter=; manual metrics (e.g. vector_*) may not export to OTLP on some stacks"
+            )
         
     except ImportError:
         logger.warning(
