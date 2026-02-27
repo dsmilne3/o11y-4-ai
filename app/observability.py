@@ -342,16 +342,8 @@ def setup_metrics() -> None:
         ),
     ]
     
-    # Check if OpenLIT has already set a MeterProvider
-    existing_meter_provider = metrics.get_meter_provider()
-    if existing_meter_provider and hasattr(existing_meter_provider, '_sdk_config'):
-        # OpenLIT or another SDK has already set up the MeterProvider
-        # We can't override it, so just use the existing one
-        logger.info("Using existing MeterProvider (likely from OpenLIT)")
-        logger.info("OpenTelemetry metrics configured with GenAI semantic conventions compliance")
-        return
-    
-    # Create metric readers
+    # Create metric readers (we always set our MeterProvider so that vector_*, gen_ai_*, and
+    # all custom metrics are exported via our OTLP and Prometheus readers regardless of OpenLIT)
     readers = []
     
     # Prometheus exporter
@@ -467,16 +459,17 @@ def initialize_observability() -> None:
         # Setup logging first
         setup_logging()
         
-        # Initialize OpenLIT BEFORE setting up OTel metrics to avoid MeterProvider conflict
-        # OpenLIT will set up its own MeterProvider first, then OTel can add exporters to it
+        # Setup metrics first so our MeterProvider (with OTLP + Prometheus) is the global one.
+        # This ensures vector_* and all custom metrics are always sent to OTEL_EXPORTER_OTLP_ENDPOINT.
+        setup_metrics()
+        
+        # Then init OpenLIT with our meter so it uses our provider and does not replace it.
+        # Otherwise OpenLIT's provider would be the only exporter and vector_* metrics would not be sent.
         if os.getenv("ENABLE_OPENLIT", "false").lower() == "true":
             initialize_openlit_instrumentation()
         
         # Setup tracing
         setup_tracing()
-        
-        # Setup metrics
-        setup_metrics()
         
         # Setup automatic instrumentation
         setup_automatic_instrumentation()
@@ -523,6 +516,10 @@ def initialize_openlit_instrumentation():
         
         logger.info("Initializing OpenLIT auto-instrumentation...")
         
+        # Disable OpenLIT's own metrics so it does not replace our MeterProvider. Our provider
+        # (set in setup_metrics()) exports all metrics to OTLP, including vector_* and gen_ai_*
+        # from openai_service.py. OpenLIT still does tracing and evals; we use manual gen_ai_*
+        # instrumentation for metrics.
         openlit.init(
             otlp_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
             otlp_headers=_parse_otlp_headers(os.getenv("OTEL_EXPORTER_OTLP_HEADERS")),
@@ -534,15 +531,13 @@ def initialize_openlit_instrumentation():
             ),
             collect_gpu_stats=os.getenv("OPENLIT_COLLECT_GPU_STATS", "false").lower() == "true",
             disable_batch=False,
+            disable_metrics=True,
         )
         
         logger.info(
             "OpenLIT auto-instrumentation initialized",
             telemetry_sdk_name="openlit",
-            pricing_source=os.getenv(
-                "OPENLIT_PRICING_JSON",
-                "https://raw.githubusercontent.com/openlit/openlit/main/assets/pricing.json"
-            ),
+            disable_metrics=True,
             gpu_stats_enabled=os.getenv("OPENLIT_COLLECT_GPU_STATS", "false").lower() == "true"
         )
         

@@ -50,14 +50,21 @@ except ImportError:
 
 logger = structlog.get_logger(__name__)
 
-# Create OpenLIT evals instance after environment is loaded
+# Create OpenLIT evals instance after environment is loaded (support older OpenLIT without collect_metrics)
 openlit_evals = None
 if OPENLIT_AVAILABLE and All:
     try:
-        openlit_evals = All(collect_metrics=True)
+        try:
+            openlit_evals = All(collect_metrics=True)
+        except TypeError:
+            openlit_evals = All()
+        logger.info("OpenLIT evals initialized")
     except Exception as e:
-        logger.warning(f"Failed to create OpenLIT evals: {e}")
+        logger.warning("OpenLIT evals not available", error=str(e))
         OPENLIT_AVAILABLE = False
+else:
+    if not OPENLIT_AVAILABLE:
+        logger.info("OpenLIT evals skipped", reason="openlit.evals not installed")
 tracer = trace.get_tracer(__name__)
 meter = metrics.get_meter(__name__)
 
