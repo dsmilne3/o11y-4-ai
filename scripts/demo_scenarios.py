@@ -43,7 +43,12 @@ class DemoScenarios:
             "How do transformer models work in language processing?",
             "What are the ethical considerations in AI development?",
             "Explain the role of data in machine learning.",
-            "What is the future of artificial intelligence?"
+            "What is the future of artificial intelligence?",
+        ]
+        # Prompts used in chat scenario for model response quality evaluation (evals / LLM-as-a-Judge)
+        self.quality_eval_prompts = [
+            "Tell me a dad joke.",
+            "Why do we dream? Please explain.",
         ]
         
         self.sample_documents = [
@@ -82,11 +87,16 @@ class DemoScenarios:
             return False
 
     async def scenario_chat_completions(self) -> None:
-        """Demonstrate chat completions with observability."""
+        """Demonstrate chat completions with observability and response quality evals."""
         logger.info("=== Running Chat Completion Scenarios ===")
-        
-        for i, (question, user) in enumerate(zip(self.sample_questions[:5], self.user_profiles)):
-            logger.info(f"Chat scenario {i+1}/5", question=question[:50], user_id=user["user_id"])
+        # First 5 general questions + 2 quality-eval prompts (dad joke, why we dream)
+        chat_prompts = list(zip(
+            self.sample_questions[:5] + self.quality_eval_prompts,
+            list(self.user_profiles) + self.user_profiles[:2]  # cycle users for extra two
+        ))
+        total = len(chat_prompts)
+        for i, (question, user) in enumerate(chat_prompts):
+            logger.info(f"Chat scenario {i+1}/{total}", question=question[:50], user_id=user["user_id"])
             
             try:
                 response = await self.client.post(
@@ -255,7 +265,9 @@ class DemoScenarios:
         pipeline_queries = [
             "Explain machine learning in simple terms",
             "What are the benefits of deep learning?",
-            "How is AI used in healthcare?"
+            "How is AI used in healthcare?",
+            "Tell me a dad joke.",
+            "Why do we dream? Please explain.",
         ]
         
         for i, query in enumerate(pipeline_queries):

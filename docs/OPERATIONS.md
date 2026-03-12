@@ -357,6 +357,121 @@ When GPU unavailable or `USE_GPU=false`:
 - Model dtype: `torch.float32`
 - Performance: ~10x slower than GPU
 
+## Monitoring NVIDIA GPUs on EC2 Ubuntu
+
+To monitor NVIDIA GPUs on an EC2 Ubuntu server (e.g. g4dn, g5, p3, p4), do the following.
+
+### 1. On the EC2 Ubuntu instance
+
+**Install NVIDIA driver and CUDA (if not using an AMI that already has them):**
+
+```bash
+# Check for existing driver
+nvidia-smi
+
+# If missing, install (example for Ubuntu 22.04; adjust for your AMI)
+sudo apt-get update && sudo apt-get install -y nvidia-driver-535  # or newer
+# Reboot if the driver was just installed
+sudo reboot
+```
+
+**Verify GPU and PyTorch CUDA:**
+
+```bash
+python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count())"
+```
+
+If you see a deprecation warning about `pynvml`, the project uses `nvidia-ml-py` instead. Ensure it is installed and the old package removed:
+
+```bash
+pip install nvidia-ml-py
+pip uninstall pynvml -y
+```
+
+### 2. Run the app with GPU enabled
+
+**Bare metal / systemd:**
+
+- In `.env` on the server set:
+  - `USE_GPU=true`
+  - `GPU_DEVICE_ID=0` (or the index of the GPU you want to use)
+- Start the app so it binds to all interfaces (e.g. `--host 0.0.0.0`) so scrapers can reach it.
+
+**Docker on EC2:**
+
+- Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on the host so containers can use the GPU.
+- In `.env` set `USE_GPU=true` and `GPU_DEVICE_ID=0`.
+- Run the stack with GPU access, for example:
+
+```yaml
+# docker-compose: ensure the ai-demo service has runtime and device access
+services:
+  ai-demo:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+```
+
+Or with `docker run`: use `--gpus all` (or `--gpus '"device=0"'` for a single GPU).
+
+### 3. Confirm GPU metrics from the app
+
+The app uses **GPUtil** when CUDA is available and reports:
+
+- `gpu_utilization_percent`
+- `gpu_memory_used_bytes`
+- `gpu_temperature_celsius`
+
+**Check health and metrics on the server:**
+
+```bash
+# Health (should show device: "cuda:0" when GPU is used)
+curl -s http://localhost:8080/health | jq '.services.local_model'
+
+# GPU metrics
+curl -s http://localhost:8080/metrics | grep -E "gpu_utilization|gpu_memory_used|gpu_temperature"
+```
+
+### 4. Get GPU metrics into Grafana
+
+- **OTLP:** If `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` are set, the app already exports metrics (including GPU) to Grafana Cloud (or your OTLP endpoint) on its export interval; no extra scrape needed for that path.
+- **Prometheus scrape:** If you use Grafana Alloy or a Prometheus/Agent on the same host, add a scrape job for the app’s metrics endpoint. Example for Alloy on the EC2 host (scrape the app on 8080):
+
+```hcl
+# In config.alloy, point the demo scrape to the app (replace localhost if Alloy runs elsewhere)
+prometheus.scrape "ai_demo_app" {
+  targets = [{"__address__" = "localhost:8080"}]
+  metrics_path = "/metrics"
+  # ... rest unchanged; the existing relabel rule already keeps gpu_.* metrics
+}
+```
+
+If the scraper runs on another machine, use the EC2 instance’s private IP or hostname and ensure security groups/firewall allow access to port 8080 (or the port the app uses).
+
+### 5. Optional: OpenLIT GPU stats
+
+For additional GPU stats from OpenLIT, set in `.env`:
+
+```bash
+ENABLE_OPENLIT=true
+OPENLIT_COLLECT_GPU_STATS=true
+```
+
+### Quick checklist
+
+| Step | Action |
+|------|--------|
+| 1 | `nvidia-smi` works on EC2 Ubuntu |
+| 2 | `torch.cuda.is_available()` is `True` in the app’s Python env (or in the container if using Docker) |
+| 3 | `.env` has `USE_GPU=true` and correct `GPU_DEVICE_ID` |
+| 4 | If Docker: container started with GPU access (`--gpus` or compose `reservations.devices`) |
+| 5 | `curl http://localhost:8080/metrics \| grep gpu_` shows GPU metrics |
+| 6 | OTLP and/or Prometheus scrape configured so Grafana (or your backend) receives those metrics |
+
 ## Troubleshooting
 
 ### Server Won't Start

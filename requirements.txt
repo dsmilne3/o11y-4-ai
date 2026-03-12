@@ -46,7 +46,8 @@ pandas>=2.1.4
 # System monitoring
 psutil>=5.9.6
 GPUtil>=1.4.0
-pynvml>=11.5.0
+# Prefer nvidia-ml-py over deprecated pynvml (same API; GPUtil and PyTorch use it)
+nvidia-ml-py>=12.535.0
 
 # Development tools
 pytest>=7.4.3
